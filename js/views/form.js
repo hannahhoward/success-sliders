@@ -103,7 +103,7 @@ function renderExercise(exerciseId, ex, offline) {
     meterValue,
   );
 
-  const status = el('div', { className: 'small muted' }, '');
+  const status = el('div', { className: 'small muted', role: 'status' }, '');
 
   const nameInput = el('input', {
     className: 'input',
@@ -170,7 +170,7 @@ function renderExercise(exerciseId, ex, offline) {
       status.replaceChildren(el('span', { className: 'error-text' },
         plural(u - budget, 'point') + ' over — take some back'));
     } else {
-      status.replaceChildren('Ready to submit.');
+      status.replaceChildren(nameInput.value.trim() === '' ? 'Add your name to submit.' : 'Ready to submit.');
     }
     submitBtn.disabled = offline || submitting || nameInput.value.trim() === '' || u !== budget;
   }
@@ -248,7 +248,14 @@ export async function renderForm(exerciseId) {
   try {
     doc = await getExercise(exerciseId);
   } catch (err) {
+    // Network failure ≠ bad link: getExercise returns null only when the doc
+    // genuinely doesn't exist, and throws when it couldn't be fetched.
     console.error(err);
+    mount(el('div', { className: 'card empty-state' },
+      el('h2', {}, 'Couldn’t load the exercise'),
+      el('p', { className: 'muted' }, 'Check your connection and reload this page.'),
+    ));
+    return;
   }
   const ex = validateExercise(doc);
   if (!ex) {

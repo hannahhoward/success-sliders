@@ -8,11 +8,14 @@
   --surface: #fcfcfb;
   --ink: #0b0b0b;
   --ink-2: #52514e;
-  --muted: #898781;
+  --muted: #6f6e69;
   --hairline: #e1e0d9;
   --border: rgba(11, 11, 11, 0.1);
   --accent: #2a78d6;
   --accent-down: #1c5cab;
+  --btn-primary-bg: #1c5cab;
+  --btn-primary-bg-hover: #174688;
+  --btn-primary-ink: #ffffff;
   --link: #1c5cab;
   --track: #cde2fb;
   --good: #006300;
@@ -34,6 +37,9 @@
     --border: rgba(255, 255, 255, 0.1);
     --accent: #3987e5;
     --accent-down: #5598e7;
+    --btn-primary-bg: #3987e5;
+    --btn-primary-bg-hover: #5598e7;
+    --btn-primary-ink: #0b0b0b;
     --link: #6da7ec;
     --track: #184f95;
     --good: #0ca30c;
@@ -55,6 +61,9 @@
   --border: rgba(255, 255, 255, 0.1);
   --accent: #3987e5;
   --accent-down: #5598e7;
+  --btn-primary-bg: #3987e5;
+  --btn-primary-bg-hover: #5598e7;
+  --btn-primary-ink: #0b0b0b;
   --link: #6da7ec;
   --track: #184f95;
   --good: #0ca30c;
@@ -66,7 +75,8 @@
 
 * { box-sizing: border-box; }
 
-html { height: 100%; }
+/* scroll-padding keeps focus- and anchor-scrolled elements clear of the sticky meter */
+html { height: 100%; scroll-padding-top: 72px; }
 
 body {
   margin: 0;
@@ -212,11 +222,11 @@ a { color: var(--link); text-underline-offset: 2px; }
 .btn:disabled { opacity: 0.45; cursor: not-allowed; }
 
 .btn-primary {
-  color: #ffffff;
-  background: var(--accent);
+  color: var(--btn-primary-ink);
+  background: var(--btn-primary-bg);
   border-color: transparent;
 }
-.btn-primary:hover:not(:disabled) { background: var(--accent-down); border-color: transparent; }
+.btn-primary:hover:not(:disabled) { background: var(--btn-primary-bg-hover); border-color: transparent; }
 
 .btn-quiet { border-color: transparent; background: transparent; color: var(--ink-2); }
 .btn-quiet:hover { background: var(--page); border-color: transparent; }
@@ -353,7 +363,8 @@ a { color: var(--link); text-underline-offset: 2px; }
 .dotplot-row + .dotplot-row { border-top: 1px solid var(--hairline); }
 @media (max-width: 520px) {
   .dotplot-row { grid-template-columns: 1fr; gap: 6px; padding: 12px 0; }
-  .dotplot-row .mean-value { display: none; }
+  .dotplot-row .mean-value { text-align: left; font-size: 13px; }
+  .dotplot-row .mean-value .sub { display: inline; margin-left: 4px; }
 }
 
 .dotplot-label { font-weight: 600; font-size: 14.5px; overflow-wrap: anywhere; }

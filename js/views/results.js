@@ -43,11 +43,22 @@ export async function renderResults(exerciseId, dFromUrl) {
     return;
   }
 
+  mount(el('div', { className: 'card empty-state' },
+    el('p', { className: 'muted' }, 'Loading…'),
+  ));
+
   let ex = null;
   try {
     ex = await getExercise(exerciseId);
-  } catch {
-    ex = null;
+  } catch (err) {
+    // Network failure ≠ bad link — getExercise only returns null for a
+    // genuinely missing doc, and throws when it couldn't be fetched.
+    console.error(err);
+    mount(el('div', { className: 'card empty-state' },
+      el('h2', {}, 'Couldn’t load results'),
+      el('p', { className: 'muted' }, 'Check your connection and reload this page.'),
+    ));
+    return;
   }
   if (!ex || typeof ex.title !== 'string' || !Array.isArray(ex.labels) || ex.labels.length < 2
     || !Number.isInteger(ex.max) || ex.max < 2 || !Number.isInteger(ex.budget) || !ex.pub) {
@@ -83,6 +94,31 @@ export async function renderResults(exerciseId, dFromUrl) {
   let latest = null;
   let seq = 0;
 
+  function segButton(label, value) {
+    return el('button', {
+      type: 'button',
+      'aria-pressed': String(mode === value),
+      onClick: () => {
+        if (mode === value) return;
+        mode = value;
+        segAgg.setAttribute('aria-pressed', String(mode === 'aggregate'));
+        segInd.setAttribute('aria-pressed', String(mode === 'individual'));
+        renderContent();
+      },
+    }, label);
+  }
+
+  // Counts, seg control, and content live in separate slots; the seg buttons
+  // persist across re-renders so keyboard focus survives mode toggles and
+  // live snapshot updates.
+  const segAgg = segButton('Aggregate', 'aggregate');
+  const segInd = segButton('Individual', 'individual');
+  const seg = el('div', { className: 'seg', role: 'group', 'aria-label': 'Results view', hidden: true },
+    segAgg, segInd);
+  const countsSlot = el('div', { role: 'status' });
+  const contentSlot = el('div', { className: 'stack' });
+  region.append(countsSlot, seg, contentSlot);
+
   const classify = async (doc) => {
     let obj;
     try {
@@ -101,12 +137,9 @@ export async function renderResults(exerciseId, dFromUrl) {
     return { status: 'ok', name, values, created: doc.created };
   };
 
-  const renderRegion = () => {
-    if (!latest) return;
+  function renderCounts() {
     const { ok, invalid, unreadable } = latest;
-    const nodes = [];
-
-    nodes.push(el('p', { className: 'muted small' },
+    countsSlot.replaceChildren(el('p', { className: 'muted small' },
       `${ok.length} response${ok.length === 1 ? '' : 's'}`,
       invalid.length ? [', ', el('span', {
         tabIndex: 0,
@@ -116,31 +149,35 @@ export async function renderResults(exerciseId, dFromUrl) {
         tabIndex: 0,
         dataset: { tip: 'Could not be decrypted — possibly tampered or corrupted' },
       }, `${unreadable} unreadable`)] : null,
+      ok.some((e) => e.dup) ? ' — includes repeat submissions from the same name (see Individual)' : null,
     ));
+  }
 
-    if (!ok.length) {
+  function renderContent() {
+    if (!latest) return;
+    const { ok, invalid, unreadable } = latest;
+    const total = ok.length + invalid.length + unreadable;
+    seg.hidden = !ok.length && !invalid.length;
+
+    // Live updates rebuild this slot — restore focus to the equivalent mark
+    // so keyboard position survives.
+    const focusKey = contentSlot.contains(document.activeElement)
+      ? (document.activeElement.dataset?.key ?? null)
+      : null;
+
+    const nodes = [];
+    if (total === 0) {
       nodes.push(el('div', { className: 'card empty-state' },
         el('p', { className: 'muted' }, 'No responses yet — share the form link above. New responses appear here live.'),
       ));
-      region.replaceChildren(...nodes);
-      return;
-    }
-
-    const segButton = (label, value) => el('button', {
-      type: 'button',
-      'aria-pressed': String(mode === value),
-      onClick: () => {
-        if (mode === value) return;
-        mode = value;
-        renderRegion();
-      },
-    }, label);
-    nodes.push(el('div', { className: 'seg', role: 'group', 'aria-label': 'Results view' },
-      segButton('Aggregate', 'aggregate'),
-      segButton('Individual', 'individual'),
-    ));
-
-    if (mode === 'aggregate') {
+    } else if (mode === 'aggregate' && !ok.length) {
+      // Responses exist but none passed decryption/validation — very
+      // different from "nobody answered".
+      nodes.push(el('div', { className: 'card empty-state' },
+        el('p', { className: 'muted' },
+          'Responses came in, but none could be displayed. If that’s unexpected, check that you opened your original results link.'),
+      ));
+    } else if (mode === 'aggregate') {
       nodes.push(el('div', { className: 'card' }, ex.labels.map((label, i) => {
         const vals = ok.map((r) => r.values[i]);
         const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
@@ -156,7 +193,12 @@ export async function renderResults(exerciseId, dFromUrl) {
           const tip = `${names.join(', ')} (${names.length} of ${ok.length})`;
           // Stack up to 4 dots per value; the tooltip carries the full list.
           for (let k = 0; k < Math.min(names.length, 4); k++) {
-            const dot = el('button', { type: 'button', className: 'dot', dataset: { tip }, 'aria-label': tip });
+            const dot = el('button', {
+              type: 'button',
+              className: 'dot',
+              dataset: { tip, key: 'd' + i + 'v' + v + 'k' + k },
+              'aria-label': tip,
+            });
             dot.style.left = ((v - 1) / (ex.max - 1)) * 100 + '%';
             if (k > 0) dot.style.marginTop = (k % 2 ? -1 : 1) * Math.ceil(k / 2) * 7 + 'px';
             track.append(dot);
@@ -199,10 +241,16 @@ export async function renderResults(exerciseId, dFromUrl) {
           el('span', { className: 'small error-text' }, 'invalid response — excluded from aggregate'),
         ),
       )));
+      if (!ok.length && !invalid.length) {
+        nodes.push(el('div', { className: 'card empty-state' },
+          el('p', { className: 'muted' }, 'Nothing readable to show here yet.'),
+        ));
+      }
     }
 
-    region.replaceChildren(...nodes);
-  };
+    contentSlot.replaceChildren(...nodes);
+    if (focusKey) contentSlot.querySelector('[data-key="' + focusKey + '"]')?.focus();
+  }
 
   const onDocs = async (docs) => {
     const token = ++seq;
@@ -218,7 +266,8 @@ export async function renderResults(exerciseId, dFromUrl) {
     for (const e of ok) counts.set(e.name.toLowerCase(), (counts.get(e.name.toLowerCase()) ?? 0) + 1);
     for (const e of ok) e.dup = counts.get(e.name.toLowerCase()) > 1;
     latest = { ok, invalid, unreadable };
-    renderRegion();
+    renderCounts();
+    renderContent();
   };
 
   return watchResponses(exerciseId, onDocs, () => {

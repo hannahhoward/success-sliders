@@ -15,8 +15,10 @@ const ROUTES = [
 ];
 
 let cleanup = null;
+let navSeq = 0;
 
 async function route() {
+  const token = ++navSeq;
   if (typeof cleanup === 'function') cleanup();
   cleanup = null;
   window.scrollTo(0, 0);
@@ -31,8 +33,17 @@ async function route() {
     return;
   }
   try {
-    cleanup = await match[1](match[0]);
+    const c = await match[1](match[0]);
+    if (token !== navSeq) {
+      // A newer navigation won while this view was loading. This stale view
+      // may have mounted over the newer one — undo it and re-render the hash.
+      if (typeof c === 'function') c();
+      route();
+      return;
+    }
+    cleanup = c;
   } catch (err) {
+    if (token !== navSeq) return;
     console.error(err);
     mount(el('div', { className: 'card empty-state' },
       el('h2', {}, 'Something went wrong'),

@@ -58,6 +58,8 @@ function formCard() {
   const labels = [...DEFAULT_LABELS];
   // Budget tracks 3×n until the user edits it by hand.
   let budgetTouched = false;
+  // Guards against re-enabling Create (via update()) while a create is in flight.
+  let creating = false;
 
   const titleInput = el('input', {
     className: 'input',
@@ -136,6 +138,8 @@ function formCard() {
           syncBudget();
           renderDims();
           update();
+          // The activated button was destroyed — keep keyboard focus in the list.
+          dimsWrap.children[Math.min(i, labels.length - 1)]?.querySelector('input')?.focus();
         },
       }, '×'),
     )));
@@ -161,7 +165,7 @@ function formCard() {
     }
     errNode.textContent = msg;
     errNode.hidden = !msg;
-    createBtn.disabled = !configured || !!msg || !titleInput.value.trim();
+    createBtn.disabled = !configured || creating || !!msg || !titleInput.value.trim();
   }
 
   async function create() {
@@ -173,6 +177,7 @@ function formCard() {
       max: intVal(scaleInput),
       budget: intVal(budgetInput),
     };
+    creating = true;
     createBtn.disabled = true;
     createBtn.textContent = 'Creating…';
     try {
@@ -184,6 +189,7 @@ function formCard() {
     } catch (err) {
       console.error(err);
       toast('Couldn\'t create the exercise — check your connection');
+      creating = false;
       createBtn.disabled = false;
       createBtn.textContent = 'Create exercise';
     }
