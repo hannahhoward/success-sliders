@@ -88,6 +88,7 @@ Serve the directory with any static file server, e.g.
 | `js/firebase.js` | Firestore access (create / fetch / submit / live-watch) |
 | `js/views/` | The three screens: create, respond, results |
 | `firestore.rules` | The entire server-side security model |
+| `tools/e2e/` | Live smoke test: crypto roundtrip + every rules denial (`npm i && node e2e.mjs '<config JSON>'`; leaves a few immutable test docs behind) |
 
 ## License
 

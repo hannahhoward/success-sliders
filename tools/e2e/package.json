@@ -1,0 +1,8 @@
+{
+  "name": "success-sliders-e2e",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "firebase": "^12.0.0"
+  }
+}
