@@ -1,0 +1,59 @@
+rules_version = '2';
+
+// No-auth capability model: knowing an exercise id lets you read its config
+// and submit a response; response documents are E2E-encrypted ciphertext, so
+// public reads reveal nothing. Everything is create-only and shape/size
+// bounded. Default deny for all other paths.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function validExercise() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['v', 'title', 'labels', 'max', 'budget', 'pub', 'created'])
+        && d.keys().hasAll(['v', 'title', 'labels', 'max', 'budget', 'pub', 'created'])
+        && d.v == 1
+        && d.title is string && d.title.size() >= 1 && d.title.size() <= 120
+        && d.labels is list && d.labels.size() >= 2 && d.labels.size() <= 12
+        && d.labels.join('|').size() <= 1000
+        // Sliders run 1..max; a budget of n or max*n would leave nothing to
+        // trade off, so both extremes are excluded.
+        && d.max is int && d.max >= 2 && d.max <= 10
+        && d.budget is int && d.budget > d.labels.size() && d.budget < d.max * d.labels.size()
+        && d.pub is map && d.pub.keys().hasOnly(['x', 'y'])
+        && d.pub.x is string && d.pub.x.size() == 43
+        && d.pub.y is string && d.pub.y.size() == 43
+        && d.created == request.time;
+    }
+
+    function validResponse(exerciseId) {
+      let d = request.resource.data;
+      return exists(/databases/$(database)/documents/exercises/$(exerciseId))
+        && d.keys().hasOnly(['v', 'eph', 'salt', 'iv', 'ct', 'created'])
+        && d.keys().hasAll(['v', 'eph', 'salt', 'iv', 'ct', 'created'])
+        && d.v == 1
+        && d.eph is map && d.eph.keys().hasOnly(['x', 'y'])
+        && d.eph.x is string && d.eph.x.size() == 43
+        && d.eph.y is string && d.eph.y.size() == 43
+        && d.salt is string && d.salt.size() >= 16 && d.salt.size() <= 32
+        && d.iv is string && d.iv.size() == 16
+        && d.ct is string && d.ct.size() >= 24 && d.ct.size() <= 8192
+        && d.created == request.time;
+    }
+
+    match /exercises/{exerciseId} {
+      // get-only: the exercise id in the form link is the read capability.
+      // list stays denied so ids can't be enumerated.
+      allow get: if true;
+      allow list: if false;
+      allow create: if validExercise();
+      allow update, delete: if false;
+
+      match /responses/{responseId} {
+        // Readable ciphertext; only the results-link holder can decrypt.
+        allow get, list: if true;
+        allow create: if validResponse(exerciseId);
+        allow update, delete: if false;
+      }
+    }
+  }
+}
